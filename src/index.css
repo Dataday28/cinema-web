@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+
+.player-progress {
+    appearance: none;
+    height: 4px;
+    border-radius: 9999px;
+
+    background:
+        linear-gradient(
+            to right,
+            white var(--progress),
+            rgba(255, 255, 255, 0.3)
+                var(--progress)
+        );
+}
+
+.player-progress::-webkit-slider-thumb {
+    appearance: none;
+
+    width: 14px;
+    height: 14px;
+
+    border-radius: 50%;
+
+    background: white;
+
+    opacity: 0;
+
+    transition:
+        opacity 150ms ease,
+        transform 150ms ease;
+}
+
+.player-progress:hover {
+    height: 6px;
+}
+
+.player-progress:hover::-webkit-slider-thumb {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+@keyframes player-feedback {
+    0% {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+
+    20% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    70% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+        transform: scale(1.08);
+    }
+}
