@@ -1,6 +1,7 @@
-import { Hero } from '../../components/hero/Hero';
+import { HeroCarousel } from '../../components/hero/HeroCarousel';
 import { MediaRow } from '../../components/media/MediaRow';
 import { HomeSkeleton } from '../../components/skeletons/HomeSkeleton';
+import { useFeaturedItems } from '../../hooks/useFeaturedItems';
 import { useHome } from '../../hooks/useHome';
 
 export function Home() {
@@ -11,7 +12,15 @@ export function Home() {
         recentlyAdded,
         isLoading,
         error,
+        hasPartialError,
+        retry,
     } = useHome();
+
+    const featuredItems = useFeaturedItems(
+        movies,
+        series,
+        8
+    );
 
     if (isLoading) {
         return <HomeSkeleton />;
@@ -19,24 +28,54 @@ export function Home() {
 
     if (error) {
         return (
-            <div className="min-h-screen bg-[#080a0d] text-white">
-                {error}
-            </div>
+            <main
+                className="
+                flex
+                min-h-screen
+                flex-col
+                items-center
+                justify-center
+                gap-5
+                bg-[#080a0d]
+                px-6
+                text-center
+                text-white
+            "
+            >
+                <h2 className="text-2xl font-semibold">
+                    No pudimos cargar tu biblioteca
+                </h2>
+
+                <p className="max-w-md text-white/60">
+                    Comprueba la conexión con Jellyfin e inténtalo de nuevo.
+                </p>
+
+                <button
+                    type="button"
+                    onClick={retry}
+                    className="
+                    cursor-pointer
+                    rounded-md
+                    bg-white
+                    px-6
+                    py-3
+                    font-semibold
+                    text-black
+                    transition-colors
+                    hover:bg-white/80
+                "
+                >
+                    Reintentar
+                </button>
+            </main>
         );
     }
-
-    const featured =
-        recentlyAdded[0] ??
-        movies[0] ??
-        series[0];
 
 
     return (
         <main id="inicio" className="bg-[#080a0d]">
 
-            {featured && (
-                <Hero item={featured} />
-            )}
+            <HeroCarousel items={featuredItems} />
 
             <div
                 className="
@@ -48,6 +87,43 @@ export function Home() {
                     pb-16
                     "
             >
+
+                {hasPartialError && (
+                    <div
+                        role="status"
+                        className="
+                            mx-4
+                            rounded-md
+                            bg-white/6
+                            px-5
+                            py-4
+                            text-sm
+                            text-white/70
+                            sm:mx-8
+                            md:mx-12
+                            lg:mx-16
+                        "
+                    >
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <span>
+                                Algunas secciones no pudieron cargarse.
+                            </span>
+
+                            <button
+                                type="button"
+                                onClick={retry}
+                                className="
+                    cursor-pointer
+                    font-semibold
+                    text-white
+                    hover:underline
+                "
+                            >
+                                Reintentar
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {recentlyAdded.length > 0 && (
                     <MediaRow

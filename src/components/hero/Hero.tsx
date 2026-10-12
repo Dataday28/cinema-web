@@ -1,6 +1,7 @@
 import type { MediaItem } from '../../types/media';
 import PlayIcon from '../../assets/play.svg';
 import { useMediaDetails } from '../../context/MediaDetailsContext';
+import { HeroBackground } from './HeroBackground';
 
 interface HeroProps {
     item: MediaItem;
@@ -19,6 +20,7 @@ export function Hero({ item }: HeroProps) {
     return (
         <section
             className="
+                group/hero
                 relative
                 flex min-h-[88vh]
                 w-full
@@ -32,25 +34,55 @@ export function Hero({ item }: HeroProps) {
                 after:bg-[linear-gradient(to_bottom,transparent_45%,#080a0d_100%)]
                 after:content-['']
             "
-            style={{
-                backgroundImage: `
-                    linear-gradient(
-                        to bottom,
-                        rgba(8, 10, 13, 0.5) 0%,
-                        transparent 28%,
-                        transparent 52%,
-                        #080a0d 100%
-                    ),
-                    linear-gradient(
-                        to right,
-                        rgba(0, 0, 0, 0.9) 0%,
-                        rgba(0, 0, 0, 0.6) 40%,
-                        rgba(0, 0, 0, 0.1) 70%
-                    ),
-                    url("${item.backdrop}")
-                `,
-            }}
+            // style={{
+            //     backgroundImage: `
+            //         linear-gradient(
+            //             to bottom,
+            //             rgba(8, 10, 13, 0.5) 0%,
+            //             transparent 28%,
+            //             transparent 52%,
+            //             #080a0d 100%
+            //         ),
+            //         linear-gradient(
+            //             to right,
+            //             rgba(0, 0, 0, 0.9) 0%,
+            //             rgba(0, 0, 0, 0.6) 40%,
+            //             rgba(0, 0, 0, 0.1) 70%
+            //         ),
+            //         url("${item.backdrop}")
+            //     `,
+            // }}
         >
+            <HeroBackground imageUrl={item.backdrop ?? ''} duration={700} />
+
+            {/* Gradiente lateral para mejorar la legibilidad */}
+            <div
+                className="
+                    pointer-events-none
+                    absolute
+                    inset-0
+                    z-1
+                    bg-linear-to-r
+                    from-black/85
+                    via-black/40
+                    to-transparent
+                "
+            />
+
+            {/* Gradiente superior */}
+            <div
+                className="
+                    pointer-events-none
+                    absolute
+                    inset-0
+                    z-1
+                    bg-linear-to-b
+                    from-black/40
+                    via-transparent
+                    to-transparent
+                "
+            />
+
             <div className="relative z-10 max-w-162.5">
 
                 {item.logo ? (
@@ -97,9 +129,41 @@ export function Hero({ item }: HeroProps) {
 
                 </div>
 
-                <p className="max-w-150 text-[1.05rem] leading-normal text-[#eee]">
+                <div
+                    className="
+                        grid
+                        grid-rows-[0fr]
+                        opacity-0
+                        transition-[grid-template-rows,opacity]
+                        duration-500
+                        ease-in-out
+
+                        group-hover/hero:grid-rows-[1fr]
+                        group-hover/hero:opacity-100
+
+                        group-focus-within/hero:grid-rows-[1fr]
+                        group-focus-within/hero:opacity-100
+                    "
+                >
+                    <div className="min-h-0 overflow-hidden">
+                        <p
+                            className="
+                                max-w-xl
+                                pb-3
+                                text-sm
+                                leading-relaxed
+                                text-white/80
+                                md:text-base
+                            "
+                        >
+                            {item.description}
+                        </p>
+                    </div>
+                </div>
+
+                {/* <p className="max-w-150 text-[1.05rem] leading-normal text-[#eee]">
                     {item.description}
-                </p>
+                </p> */}
 
                 <div className="mt-6 flex gap-3">
 

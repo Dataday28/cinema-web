@@ -1,11 +1,6 @@
-import {
-    useEffect,
-    useState,
-} from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
-import type {
-    MediaItem,
-} from '../types/media';
+import type { MediaItem } from '../types/media';
 
 import {
     getMovies,
@@ -14,9 +9,7 @@ import {
     getRecentlyAdded,
 } from '../services/jellyfin/library';
 
-import {
-    useAuth,
-} from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext';
 
 interface HomeData {
     movies: MediaItem[];
@@ -33,78 +26,118 @@ const initialData: HomeData = {
 };
 
 export function useHome() {
-
     const { session } = useAuth();
+
     const [data, setData] = useState<HomeData>(initialData);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [hasPartialError, setHasPartialError] = useState(false);
+    const [retryCount, setRetryCount] = useState(0);
+
+    const accessToken = session?.accessToken;
+    const userId = session?.userId;
+
+    const retry = useCallback(() => {
+        setRetryCount((current) => current + 1);
+    }, []);
 
     useEffect(() => {
+        let cancelled = false;
 
-        if (!session) {
+        if (!accessToken || !userId) {
+            setData(initialData);
+            setIsLoading(false);
+            setError(null);
+            setHasPartialError(false);
             return;
         }
 
         const load = async () => {
-
             setIsLoading(true);
             setError(null);
+            setHasPartialError(false);
+            setData(initialData);
 
-            try {
+            const request = {
+                accessToken,
+                userId,
+            };
 
-                const request = {
-                    accessToken:
-                        session.accessToken,
+            const results = await Promise.allSettled([
+                getMovies(request),
+                getSeries(request),
+                getContinueWatching(request),
+                getRecentlyAdded(request),
+            ]);
 
-                    userId:
-                        session.userId,
-                };
+            if (cancelled) return;
 
-                const [
-                    movies,
-                    series,
-                    continueWatching,
-                    recentlyAdded,
-                ] = await Promise.all([
-                    getMovies(request),
-                    getSeries(request),
-                    getContinueWatching(request),
-                    getRecentlyAdded(request),
-                ]);
+            const [
+                moviesResult,
+                seriesResult,
+                continueResult,
+                recentResult,
+            ] = results;
 
-                setData({
-                    movies,
-                    series,
-                    continueWatching,
-                    recentlyAdded,
-                });
+            const failures = results.filter(
+                (result) => result.status === 'rejected'
+            );
 
-            } catch (error) {
+            failures.forEach((failure) => {
+                if (failure.status === 'rejected') {
+                    console.error(
+                        'Error cargando sección de Home:',
+                        failure.reason
+                    );
+                }
+            });
 
-                console.error(
-                    'Error cargando Home:',
-                    error
-                );
-
+            if (failures.length === results.length) {
                 setError(
-                    'No se pudo cargar la biblioteca.'
+                    'No se pudo cargar la biblioteca. Inténtalo nuevamente.'
                 );
-
-            } finally {
-
                 setIsLoading(false);
-
+                return;
             }
 
+            setData({
+                movies:
+                    moviesResult.status === 'fulfilled'
+                        ? moviesResult.value
+                        : [],
+
+                series:
+                    seriesResult.status === 'fulfilled'
+                        ? seriesResult.value
+                        : [],
+
+                continueWatching:
+                    continueResult.status === 'fulfilled'
+                        ? continueResult.value
+                        : [],
+
+                recentlyAdded:
+                    recentResult.status === 'fulfilled'
+                        ? recentResult.value
+                        : [],
+            });
+
+            setHasPartialError(failures.length > 0);
+            setIsLoading(false);
         };
 
-        load();
+        void load();
 
-    }, [session]);
+        return () => {
+            cancelled = true;
+        };
+    }, [accessToken, userId, retryCount]);
 
     return {
         ...data,
         isLoading,
         error,
+        hasPartialError,
+        retry,
     };
 }
