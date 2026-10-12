@@ -19,9 +19,68 @@ import {
     mapMediaItem,
 } from './mappers';
 
+import { getGenreApi } from '@jellyfin/sdk/lib/utils/api/genre-api';
+
 interface JellyfinRequest {
     accessToken: string;
     userId: string;
+}
+
+export interface GenreMediaRequest extends JellyfinRequest {
+    genreId: string;
+    startIndex?: number;
+    limit?: number;
+}
+
+export interface MediaPage {
+    items: MediaItem[];
+    totalCount: number;
+}
+
+export interface JellyfinGenre {
+    id: string;
+    name: string;
+}
+
+export async function getMediaByGenre({
+    accessToken,
+    userId,
+    genreId,
+    startIndex = 0,
+    limit = 20,
+}: GenreMediaRequest): Promise<MediaPage> {
+    const api = createJellyfinApi(accessToken);
+
+    const response = await getLibraryApi(api).getItems({
+        userId,
+
+        recursive: true,
+
+        includeItemTypes: [
+            BaseItemKind.Movie,
+            BaseItemKind.Series,
+        ],
+
+        genreIds: [genreId],
+
+        startIndex,
+        limit,
+
+        enableImages: true,
+        enableUserData: true,
+
+        fields: [
+            ItemFields.Overview,
+            ItemFields.Genres,
+        ],
+
+        sortBy: ['Random'],
+    });
+
+    return {
+        items: (response.data.Items ?? []).map(mapMediaItem),
+        totalCount: response.data.TotalRecordCount ?? 0,
+    };
 }
 
 export async function getMovies({
@@ -65,7 +124,7 @@ export async function getMovies({
             limit: 50,
         });
 
-    console.log(response.data)
+    // console.log(response.data)
 
     return (response.data.Items ?? [])
         .map(mapMediaItem);
@@ -142,7 +201,7 @@ export async function getContinueWatching({
                 ],
             });
     
-    console.log('Continue Watching Response:', response.data);
+    // console.log('Continue Watching Response:', response.data);
 
     return (response.data.Items ?? [])
         .map(mapMediaItem);
@@ -179,4 +238,26 @@ export async function getRecentlyAdded({
 
     return response.data
         .map(mapMediaItem);
+}
+
+export async function getGenres({
+    accessToken,
+    userId,
+}: JellyfinRequest): Promise<JellyfinGenre[]> {
+    const api = createJellyfinApi(accessToken);
+
+    const response = await getGenreApi(api).getGenres({
+        userId,
+        includeItemTypes: [
+            BaseItemKind.Movie,
+            BaseItemKind.Series,
+        ],
+    });
+
+    return (response.data.Items ?? [])
+        .filter((genre) => genre.Id && genre.Name)
+        .map((genre) => ({
+            id: genre.Id!,
+            name: genre.Name!,
+        }));
 }

@@ -1,10 +1,14 @@
 import { HeroCarousel } from '../../components/hero/HeroCarousel';
 import { MediaRow } from '../../components/media/MediaRow';
 import { HomeSkeleton } from '../../components/skeletons/HomeSkeleton';
+import { useAuth } from '../../context/AuthContext';
 import { useFeaturedItems } from '../../hooks/useFeaturedItems';
+import { useGenreCarousels } from '../../hooks/useGenreCarousel';
 import { useHome } from '../../hooks/useHome';
 
 export function Home() {
+    const { session } = useAuth();
+
     const {
         movies,
         series,
@@ -15,6 +19,15 @@ export function Home() {
         hasPartialError,
         retry,
     } = useHome();
+
+    const {
+        rows: genreRows,
+        isLoading: genresLoading,
+        error: genresError,
+    } = useGenreCarousels({
+        accessToken: session?.accessToken,
+        userId: session?.userId,
+    });
 
     const featuredItems = useFeaturedItems(
         movies,
@@ -154,6 +167,29 @@ export function Home() {
                         items={series}
                     />
                 )}
+
+                <section className="space-y-8">
+                    {genreRows.map((row) => (
+                        <MediaRow
+                            key={row.id}
+                            id={`genre-${row.id}`}
+                            title={row.title}
+                            items={row.items}
+                        />
+                    ))}
+
+                    {genresLoading && (
+                        <p className="px-[4%] text-sm text-white/50">
+                            Cargando categorías...
+                        </p>
+                    )}
+
+                    {genresError && (
+                        <p className="px-[4%] text-sm text-yellow-400/80">
+                            {genresError}
+                        </p>
+                    )}
+                </section>
 
             </div>
 
