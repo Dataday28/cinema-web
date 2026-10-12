@@ -1,5 +1,6 @@
 import { Hero } from '../../components/hero/Hero';
 import { MediaRow } from '../../components/media/MediaRow';
+import { HomeSkeleton } from '../../components/skeletons/HomeSkeleton';
 import { useHome } from '../../hooks/useHome';
 
 export function Home() {
@@ -13,11 +14,7 @@ export function Home() {
     } = useHome();
 
     if (isLoading) {
-        return (
-            <div className="min-h-screen bg-[#080a0d] text-white">
-                Cargando...
-            </div>
-        );
+        return <HomeSkeleton />;
     }
 
     if (error) {

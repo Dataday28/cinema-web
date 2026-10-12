@@ -30,11 +30,17 @@ export function MediaRow({
         if (!list) return;
 
         const updateScrollState = () => {
-            const maxScrollLeft = list.scrollWidth - list.clientWidth;
+            const maxScrollLeft =
+                list.scrollWidth - list.clientWidth;
+
+            const threshold = 2;
 
             setScrollState({
-                canScrollLeft: list.scrollLeft > 0,
-                canScrollRight: list.scrollLeft < maxScrollLeft - 1,
+                canScrollLeft:
+                    list.scrollLeft > threshold,
+
+                canScrollRight:
+                    list.scrollLeft < maxScrollLeft - threshold,
             });
         };
 
@@ -53,24 +59,32 @@ export function MediaRow({
     // Función de desplazamiento calculando el ancho exacto de bloques de cards
     const scroll = (direction: -1 | 1) => {
         const list = listRef.current;
+
         if (!list) return;
 
-        // Obtenemos la primera card y su contenedor envolvente (snap container)
-        const firstCardContainer = list.firstElementChild as HTMLElement | null;
-        if (!firstCardContainer) return;
+        const firstCard =
+            list.firstElementChild as HTMLElement | null;
 
-        // 1. Leemos el ancho dinámico actual de la tarjeta en pantalla + el gap (16px)
-        const gap = 16;
-        const cardWidth = firstCardContainer.getBoundingClientRect().width + gap;
+        if (!firstCard) return;
 
-        // 2. Calculamos cuántas tarjetas completas entran actualmente en la pantalla
-        const visibleCards = Math.max(1, Math.floor(list.clientWidth / cardWidth));
+        const styles = window.getComputedStyle(list);
 
-        // 3. Desplazamos exactamente ese número de tarjetas
-        const scrollAmount = visibleCards * cardWidth;
+        const gap = parseFloat(styles.columnGap) || 0;
+
+        const cardWidth =
+            firstCard.getBoundingClientRect().width;
+
+        const cardStep = cardWidth + gap;
+
+        const visibleCards = Math.max(
+            1,
+            Math.floor(
+                (list.clientWidth + gap) / cardStep
+            )
+        );
 
         list.scrollBy({
-            left: direction * scrollAmount,
+            left: direction * visibleCards * cardStep,
             behavior: 'smooth',
         });
     };
