@@ -3,8 +3,12 @@ import type { MediaItem } from '../../types/media';
 import { useMediaDetails } from '../../context/MediaDetailsContext';
 import { usePlayback } from '../../context/PlaybackContext';
 import type { PreviewPosition } from './MediaCard';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Play, Plus, ThumbsUp, ChevronDown } from "lucide-react";
+import { useAuth } from '../../context/AuthContext';
+import { getMediaTrailers } from '../../services/jellyfin/traileres';
+import { YouTubePreview } from './YouTubePreview';
+import { Volume2, VolumeX } from 'lucide-react';
 
 interface MediaPreviewProps {
     item: MediaItem;
@@ -33,6 +37,14 @@ export function MediaPreview({
     const { play } = usePlayback();
     const [isExpanded, setIsExpanded] = useState(false);
 
+    const { session } = useAuth();
+
+    const [trailerId, setTrailerId] = useState<string | null>(null);
+    const [showTrailer, setShowTrailer] = useState(false);
+    const [trailerPlaying, setTrailerPlaying] = useState(false);
+
+    const [trailerMuted, setTrailerMuted] = useState(false);
+
     useEffect(() => {
         // En el siguiente frame del navegador, activamos la expansión
         const animationFrame = requestAnimationFrame(() => {
@@ -40,6 +52,51 @@ export function MediaPreview({
         });
         return () => cancelAnimationFrame(animationFrame);
     }, []);
+
+    useEffect(() => {
+        if (!session || item.type !== 'movie') {
+            return;
+        }
+
+        let cancelled = false;
+
+        const timeout = window.setTimeout(async () => {
+            try {
+                const trailers = await getMediaTrailers({
+                    itemId: item.id,
+                    userId: session.userId,
+                    accessToken: session.accessToken,
+                });
+
+                if (cancelled || trailers.length === 0) {
+                    return;
+                }
+
+                setTrailerId(trailers[0].id);
+                setShowTrailer(true);
+            } catch (error) {
+                console.warn(
+                    'No se pudo cargar el tráiler:',
+                    error
+                );
+            }
+        }, 1500);
+
+        return () => {
+            cancelled = true;
+            window.clearTimeout(timeout);
+        };
+    }, [item.id, item.type, session]);
+
+    const handleTrailerReady = useCallback(() => {
+        setTrailerPlaying(true);
+    }, []);
+
+    const handleTrailerError = useCallback(() => {
+        setShowTrailer(false);
+        setTrailerPlaying(false);
+    }, []);
+
 
     return createPortal(
         <div
@@ -73,21 +130,80 @@ export function MediaPreview({
 
             }}
         >
+
             <div className="relative aspect-video w-full overflow-hidden">
+                
                 <img
                     src={item.landscape ?? item.image}
                     alt={item.title}
-                    className="h-full w-full object-cover"
+                    className={`
+                        absolute inset-0 h-full w-full
+                        object-cover
+                        transition-opacity duration-500
+                        ${trailerPlaying ? 'opacity-0' : 'opacity-100'}
+                    `}
                 />
 
+                {showTrailer && trailerId && (
+                    <YouTubePreview
+                        videoId={trailerId}
+                        muted={trailerMuted}
+                        onReady={handleTrailerReady}
+                        onError={handleTrailerError}
+                    />
+                )}
+
+                {trailerPlaying && (
+                    <button
+                        type="button"
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            setTrailerMuted((previous) => !previous);
+                        }}
+                        aria-label={
+                            trailerMuted
+                                ? 'Activar sonido del tráiler'
+                                : 'Silenciar tráiler'
+                        }
+                        title={
+                            trailerMuted
+                                ? 'Activar sonido'
+                                : 'Silenciar'
+                        }
+                        className="
+                            absolute bottom-3 right-3 z-20
+                            flex h-7 w-7
+                            items-center justify-center
+                            rounded-full
+                            border border-white/60
+                            bg-black/50 text-white
+                            backdrop-blur-sm
+                            transition-colors
+                            hover:bg-black/80
+                            cursor-pointer
+                        "
+                    >
+                        {trailerMuted ? (
+                            <VolumeX size={18} />
+                        ) : (
+                            <Volume2 size={18} />
+                        )}
+                    </button>
+                )}
+
                 {item.progress !== undefined && item.progress > 0 && (
-                    <div className="absolute bottom-0 left-0 right-0 h-1.5 overflow-hidden rounded-full bg-white/30">
+                    <div className="
+                        absolute bottom-0 left-0 right-0
+                        z-10 h-1.5 overflow-hidden
+                        rounded-full bg-white/30
+                    ">
                         <div
                             className="h-full bg-white"
                             style={{ width: `${item.progress}%` }}
                         />
                     </div>
                 )}
+
             </div>
 
             <div className="p-4">

@@ -87,7 +87,6 @@ export function Home() {
         );
     }
 
-
     return (
         <main id="inicio" className="bg-[#080a0d]">
 

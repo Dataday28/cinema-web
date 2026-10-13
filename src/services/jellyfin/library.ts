@@ -125,7 +125,7 @@ export async function getMovies({
             limit: 50,
         });
 
-    // console.log(response.data)
+    console.log(response.data)
 
     return (response.data.Items ?? [])
         .map(mapMediaItem);
