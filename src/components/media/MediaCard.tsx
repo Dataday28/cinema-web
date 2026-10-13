@@ -136,6 +136,9 @@ export function MediaCard({ item }: MediaCardProps) {
                 <img
                     src={item.landscape}
                     alt={item.title}
+                    loading="lazy"
+                    decoding="async"
+
                     className="
                         h-full
                         w-full

@@ -74,7 +74,8 @@ export async function getMediaByGenre({
             ItemFields.Genres,
         ],
 
-        sortBy: ['Random'],
+        sortBy: ['SortName'],
+        sortOrder: ['Ascending'],
     });
 
     return {

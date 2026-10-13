@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MediaItem } from '../../types/media';
 import { MediaCard } from './MediaCard';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -7,6 +7,12 @@ interface MediaRowProps {
     title: string;
     items: MediaItem[];
     id?: string;
+
+    onLoadMore?: () => void;
+    hasMore?: boolean;
+    isLoadingMore?: boolean;
+
+    loadError?: boolean;
 }
 
 interface ScrollState {
@@ -18,43 +24,41 @@ export function MediaRow({
     title,
     items,
     id,
+    hasMore = false,
+    isLoadingMore = false,
+    onLoadMore,
+    loadError = false,
 }: MediaRowProps) {
     const listRef = useRef<HTMLDivElement>(null);
     const [scrollState, setScrollState] = useState<ScrollState>({
         canScrollLeft: false,
         canScrollRight: false,
     });
+    const scrollFrameRef = useRef<number | null>(null);
+    const loadRequestedRef = useRef(false);
+    const previousLoadingRef = useRef(isLoadingMore);
+
 
     useEffect(() => {
-        const list = listRef.current;
-        if (!list) return;
-
-        const updateScrollState = () => {
-            const maxScrollLeft =
-                list.scrollWidth - list.clientWidth;
-
-            const threshold = 2;
-
-            setScrollState({
-                canScrollLeft:
-                    list.scrollLeft > threshold,
-
-                canScrollRight:
-                    list.scrollLeft < maxScrollLeft - threshold,
-            });
-        };
-
-        updateScrollState();
-        list.addEventListener('scroll', updateScrollState);
-
-        const resizeObserver = new ResizeObserver(updateScrollState);
-        resizeObserver.observe(list);
-
         return () => {
-            list.removeEventListener('scroll', updateScrollState);
-            resizeObserver.disconnect();
+            if (scrollFrameRef.current !== null) {
+                cancelAnimationFrame(scrollFrameRef.current);
+            }
         };
-    }, [items.length]);
+    }, []);
+
+
+    useEffect(() => {
+        if (
+            previousLoadingRef.current &&
+            !isLoadingMore &&
+            !loadError
+        ) {
+            loadRequestedRef.current = false;
+        }
+
+        previousLoadingRef.current = isLoadingMore;
+    }, [isLoadingMore, loadError]);
 
     // Función de desplazamiento calculando el ancho exacto de bloques de cards
     const scroll = (direction: -1 | 1) => {
@@ -66,6 +70,18 @@ export function MediaRow({
             list.firstElementChild as HTMLElement | null;
 
         if (!firstCard) return;
+
+        // const remaining =
+        //     list.scrollWidth - list.clientWidth - list.scrollLeft;
+
+        // if (
+        //     remaining < list.clientWidth * 0.75 &&
+        //     hasMore &&
+        //     !isLoadingMore &&
+        //     onLoadMore
+        // ) {
+        //     onLoadMore();
+        // }
 
         const styles = window.getComputedStyle(list);
 
@@ -88,6 +104,95 @@ export function MediaRow({
             behavior: 'smooth',
         });
     };
+
+    const checkLoadMore = useCallback(() => {
+        const list = listRef.current;
+        if (!list) return;
+
+        if (!hasMore || isLoadingMore || loadError || !onLoadMore) return;
+
+        const remaining =
+            list.scrollWidth - list.clientWidth - list.scrollLeft;
+
+        const threshold = list.clientWidth * 0.75;
+
+        if (remaining <= threshold && !loadRequestedRef.current) {
+            loadRequestedRef.current = true;
+            onLoadMore();
+        }
+    }, [hasMore, isLoadingMore, loadError, onLoadMore]);
+
+    const handleLoadMoreScroll = useCallback(() => {
+        if (scrollFrameRef.current !== null) return;
+
+        scrollFrameRef.current = requestAnimationFrame(() => {
+            scrollFrameRef.current = null;
+            checkLoadMore();
+        });
+    }, [checkLoadMore]);
+
+    useEffect(() => {
+        const list = listRef.current;
+        if (!list) return;
+
+        const updateScrollState = () => {
+            const maxScrollLeft =
+                list.scrollWidth - list.clientWidth;
+
+            const threshold = 2;
+
+            setScrollState((current) => {
+                const next = {
+                    canScrollLeft: list.scrollLeft > threshold,
+                    canScrollRight:
+                        list.scrollLeft < maxScrollLeft - threshold,
+                };
+
+                if (
+                    current.canScrollLeft === next.canScrollLeft &&
+                    current.canScrollRight === next.canScrollRight
+                ) {
+                    return current;
+                }
+
+                return next;
+            });
+        };
+
+        const handleScroll = () => {
+            updateScrollState();
+            handleLoadMoreScroll();
+        };
+
+        const resizeObserver = new ResizeObserver(() => {
+            updateScrollState();
+            handleLoadMoreScroll();
+        });
+
+        list.addEventListener('scroll', handleScroll, {
+            passive: true,
+        });
+
+        resizeObserver.observe(list);
+        updateScrollState();
+
+        return () => {
+            list.removeEventListener('scroll', handleScroll);
+            resizeObserver.disconnect();
+        };
+    }, [items.length, handleLoadMoreScroll]);
+
+    useEffect(() => {
+        if (!isLoadingMore && !loadError && hasMore) {
+            handleLoadMoreScroll();
+        }
+    }, [
+        items.length,
+        isLoadingMore,
+        loadError,
+        hasMore,
+        handleLoadMoreScroll,
+    ]);
 
     return (
         <section id={id} className="mb-6 md:mb-8">
@@ -131,6 +236,58 @@ export function MediaRow({
                             <MediaCard item={item} />
                         </div>
                     ))}
+
+                    {isLoadingMore && (
+                        <div
+                            className="
+                            flex
+                            w-32
+                            shrink-0
+                            items-center
+                            justify-center
+                        "
+                            role="status"
+                            aria-label="Cargando más títulos"
+                        >
+                            <div
+                                className="
+                                h-7 w-7
+                                animate-spin
+                                rounded-full
+                                border-2
+                                border-white/20
+                                border-t-white
+                            "
+                            />
+                        </div>
+                    )}
+
+                    {loadError && !isLoadingMore && (
+                        <div className="flex w-40 shrink-0 items-center justify-center">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    loadRequestedRef.current = false;
+                                    onLoadMore?.();
+                                }}
+                                className="
+                                cursor-pointer
+                                rounded-3xl
+                                border
+                                border-white/20
+                                bg-white/10
+                                px-4
+                                py-3
+                                text-sm
+                                text-white
+                                hover:bg-white/20
+                            "
+                            >
+                                Reintentar carga
+                            </button>
+                        </div>
+                    )}
+                    
                 </div>
 
                 {scrollState.canScrollRight && (

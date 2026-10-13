@@ -1,5 +1,6 @@
 import { HeroCarousel } from '../../components/hero/HeroCarousel';
 import { MediaRow } from '../../components/media/MediaRow';
+import { GenreRowSkeleton } from '../../components/skeletons/GenreRowSkeleton';
 import { HomeSkeleton } from '../../components/skeletons/HomeSkeleton';
 import { useAuth } from '../../context/AuthContext';
 import { useFeaturedItems } from '../../hooks/useFeaturedItems';
@@ -22,8 +23,10 @@ export function Home() {
 
     const {
         rows: genreRows,
+        pendingGenres,
         isLoading: genresLoading,
         error: genresError,
+        loadMore
     } = useGenreCarousels({
         accessToken: session?.accessToken,
         userId: session?.userId,
@@ -126,11 +129,11 @@ export function Home() {
                                 type="button"
                                 onClick={retry}
                                 className="
-                    cursor-pointer
-                    font-semibold
-                    text-white
-                    hover:underline
-                "
+                                cursor-pointer
+                                font-semibold
+                                text-white
+                                hover:underline
+                            "
                             >
                                 Reintentar
                             </button>
@@ -168,24 +171,33 @@ export function Home() {
                     />
                 )}
 
-                <section className="space-y-8">
+                <section className="space-y-8" aria-label="Explorar por género">
                     {genreRows.map((row) => (
                         <MediaRow
                             key={row.id}
                             id={`genre-${row.id}`}
                             title={row.title}
                             items={row.items}
+                            hasMore={row.hasMore}
+                            isLoadingMore={row.isLoadingMore}
+                            loadError={row.loadError}
+                            onLoadMore={() => loadMore(row.id)}
                         />
                     ))}
 
                     {genresLoading && (
-                        <p className="px-[4%] text-sm text-white/50">
-                            Cargando categorías...
-                        </p>
+                        <div className="space-y-8">
+                            {Array.from(
+                                { length: Math.min(pendingGenres || 2, 4) },
+                                (_, index) => (
+                                    <GenreRowSkeleton key={index} />
+                                )
+                            )}
+                        </div>
                     )}
 
                     {genresError && (
-                        <p className="px-[4%] text-sm text-yellow-400/80">
+                        <p role="status" className="px-[4%] text-sm text-yellow-400/80">
                             {genresError}
                         </p>
                     )}
