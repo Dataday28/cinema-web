@@ -4,6 +4,7 @@ interface YouTubePreviewProps {
     videoId: string;
     muted: boolean;
     onReady?: () => void;
+    onEnded?: () => void;
     onError?: () => void;
 }
 
@@ -98,6 +99,7 @@ export function YouTubePreview({
     videoId,
     muted,
     onReady,
+    onEnded,
     onError,
 }: YouTubePreviewProps) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -141,8 +143,16 @@ export function YouTubePreview({
                         onStateChange: (event) => {
                             if (cancelled) return;
 
-                            if (event.data === 1) {
-                                onReady?.();
+                            switch (event.data) {
+                                case 1:
+                                    // El tráiler comenzó a reproducirse
+                                    onReady?.();
+                                    break;
+
+                                case 0:
+                                    // El tráiler terminó
+                                    onEnded?.();
+                                    break;
                             }
                         },
                         onError: () => {

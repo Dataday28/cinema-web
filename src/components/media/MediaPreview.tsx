@@ -3,12 +3,13 @@ import type { MediaItem } from '../../types/media';
 import { useMediaDetails } from '../../context/MediaDetailsContext';
 import { usePlayback } from '../../context/PlaybackContext';
 import type { PreviewPosition } from './MediaCard';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Play, Plus, ThumbsUp, ChevronDown } from "lucide-react";
 import { useAuth } from '../../context/AuthContext';
 import { getMediaTrailers } from '../../services/jellyfin/traileres';
 import { YouTubePreview } from './YouTubePreview';
 import { Volume2, VolumeX } from 'lucide-react';
+import { activatePreview, subscribeToPreview } from '../../utils/previewCoordinator';
 
 interface MediaPreviewProps {
     item: MediaItem;
@@ -44,6 +45,24 @@ export function MediaPreview({
     const [trailerPlaying, setTrailerPlaying] = useState(false);
 
     const [trailerMuted, setTrailerMuted] = useState(false);
+    const [trailerFinished, setTrailerFinished] = useState(false);
+
+    const previewInstanceId = useRef(
+        crypto.randomUUID()
+    );
+
+    useEffect(() => {
+        return subscribeToPreview((activeId) => {
+            if (activeId === previewInstanceId.current) {
+                return;
+            }
+
+            setShowTrailer(false);
+            setTrailerPlaying(false);
+            setTrailerMuted(true);
+            setTrailerFinished(true);
+        });
+    }, []);
 
     useEffect(() => {
         // En el siguiente frame del navegador, activamos la expansión
@@ -54,7 +73,11 @@ export function MediaPreview({
     }, []);
 
     useEffect(() => {
-        if (!session || item.type !== 'movie') {
+        if (
+            !session ||
+            item.type !== 'movie' ||
+            trailerFinished
+        ) {
             return;
         }
 
@@ -72,13 +95,11 @@ export function MediaPreview({
                     return;
                 }
 
+                activatePreview(previewInstanceId.current);
                 setTrailerId(trailers[0].id);
                 setShowTrailer(true);
             } catch (error) {
-                console.warn(
-                    'No se pudo cargar el tráiler:',
-                    error
-                );
+                console.warn('Error cargando tráiler:', error);
             }
         }, 1500);
 
@@ -86,15 +107,29 @@ export function MediaPreview({
             cancelled = true;
             window.clearTimeout(timeout);
         };
-    }, [item.id, item.type, session]);
+    }, [
+        item.id,
+        item.type,
+        session,
+        trailerFinished,
+    ]);
 
     const handleTrailerReady = useCallback(() => {
         setTrailerPlaying(true);
     }, []);
 
     const handleTrailerError = useCallback(() => {
-        setShowTrailer(false);
         setTrailerPlaying(false);
+        setShowTrailer(false);
+        setTrailerFinished(true);
+        setTrailerMuted(true);
+    }, []);
+
+    const handleTrailerEnded = useCallback(() => {
+        setTrailerPlaying(false);
+        setShowTrailer(false);
+        setTrailerFinished(true);
+        setTrailerMuted(true);
     }, []);
 
 
@@ -144,11 +179,12 @@ export function MediaPreview({
                     `}
                 />
 
-                {showTrailer && trailerId && (
+                {showTrailer && trailerId && !trailerFinished && (
                     <YouTubePreview
                         videoId={trailerId}
                         muted={trailerMuted}
                         onReady={handleTrailerReady}
+                        onEnded={handleTrailerEnded}
                         onError={handleTrailerError}
                     />
                 )}

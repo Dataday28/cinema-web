@@ -8,6 +8,8 @@ export interface TrailerInfo {
     embedUrl: string;
 }
 
+const trailerCache = new Map<string, TrailerInfo[]>();
+
 interface GetTrailerRequest {
     itemId: string;
     userId: string;
@@ -52,6 +54,14 @@ export async function getMediaTrailers({
     userId,
     accessToken,
 }: GetTrailerRequest): Promise<TrailerInfo[]> {
+    const cacheKey = `${userId}:${itemId}`;
+
+    const cached = trailerCache.get(cacheKey);
+
+    if (cached) {
+        return cached;
+    }
+
     const api = createJellyfinApi(accessToken);
 
     const response = await getLibraryApi(api).getItem({
@@ -90,6 +100,8 @@ export async function getMediaTrailers({
                 `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`,
         });
     }
+
+    trailerCache.set(cacheKey, trailers);
 
     return trailers;
 }
