@@ -8,7 +8,19 @@ export interface TrailerInfo {
     embedUrl: string;
 }
 
-const trailerCache = new Map<string, TrailerInfo[]>();
+interface TrailerCacheEntry {
+    trailers: TrailerInfo[];
+    expiresAt: number;
+}
+
+const CACHE_TTL = 30 * 60 * 1000;
+
+const trailerCache = new Map<string, TrailerCacheEntry>();
+
+const pendingRequests = new Map<
+    string,
+    Promise<TrailerInfo[]>
+>();
 
 interface GetTrailerRequest {
     itemId: string;
@@ -54,54 +66,79 @@ export async function getMediaTrailers({
     userId,
     accessToken,
 }: GetTrailerRequest): Promise<TrailerInfo[]> {
-    const cacheKey = `${userId}:${itemId}`;
+    const cacheKey = `${accessToken}:${userId}:${itemId}`;
+    const now = Date.now();
 
     const cached = trailerCache.get(cacheKey);
 
-    if (cached) {
-        return cached;
+    if (cached && cached.expiresAt > now) {
+        return cached.trailers;
     }
 
-    const api = createJellyfinApi(accessToken);
+    trailerCache.delete(cacheKey);
 
-    const response = await getLibraryApi(api).getItem({
-        itemId,
-        userId,
-    });
+    const pending = pendingRequests.get(cacheKey);
 
-    const remoteTrailers = response.data.RemoteTrailers ?? [];
-
-    const trailers: TrailerInfo[] = [];
-    const seen = new Set<string>();
-
-    for (const trailer of remoteTrailers) {
-        if (!trailer.Url) continue;
-
-        const videoId = getYouTubeVideoId(trailer.Url);
-
-        if (!videoId || seen.has(videoId)) continue;
-
-        seen.add(videoId);
-
-        const params = new URLSearchParams({
-            autoplay: '1',
-            mute: '1',
-            controls: '0',
-            playsinline: '1',
-            rel: '0',
-            enablejsapi: '1',
-        });
-
-        trailers.push({
-            id: videoId,
-            name: trailer.Name ?? 'Tráiler',
-            provider: 'youtube',
-            embedUrl:
-                `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`,
-        });
+    if (pending) {
+        return pending;
     }
 
-    trailerCache.set(cacheKey, trailers);
+    const request = (async (): Promise<TrailerInfo[]> => {
+        const api = createJellyfinApi(accessToken);
 
-    return trailers;
+        const response = await getLibraryApi(api).getItem({
+            itemId,
+            userId,
+        });
+
+        const remoteTrailers =
+            response.data.RemoteTrailers ?? [];
+
+        const trailers: TrailerInfo[] = [];
+        const seen = new Set<string>();
+
+        for (const trailer of remoteTrailers) {
+            if (!trailer.Url) continue;
+
+            const videoId = getYouTubeVideoId(trailer.Url);
+
+            if (!videoId || seen.has(videoId)) {
+                continue;
+            }
+
+            seen.add(videoId);
+
+            const params = new URLSearchParams({
+                autoplay: '1',
+                mute: '1',
+                controls: '0',
+                playsinline: '1',
+                rel: '0',
+                enablejsapi: '1',
+            });
+
+            trailers.push({
+                id: videoId,
+                name: trailer.Name ?? 'Tráiler',
+                provider: 'youtube',
+                embedUrl:
+                    `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`,
+            });
+        }
+
+        trailerCache.set(cacheKey, {
+            trailers,
+            expiresAt: Date.now() + CACHE_TTL,
+        });
+
+        return trailers;
+    })();
+
+    pendingRequests.set(cacheKey, request);
+
+    try {
+        return await request;
+    } finally {
+        pendingRequests.delete(cacheKey);
+    }
 }

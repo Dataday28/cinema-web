@@ -108,6 +108,25 @@ export function YouTubePreview({
     useEffect(() => {
         let cancelled = false;
         let player: YTPlayer | null = null;
+        let playbackStarted = false;
+        let failureReported = false;
+
+        const reportFailure = () => {
+            if (cancelled || failureReported || playbackStarted) {
+                return;
+            }
+
+            failureReported = true;
+            window.clearTimeout(playbackTimeout);
+            onError?.();
+        };
+
+        const playbackTimeout = window.setTimeout(() => {
+            reportFailure()
+            if (!cancelled && !playbackStarted) {
+                onError?.();
+            }
+        }, 12000);
 
         const initialize = async () => {
             try {
@@ -145,7 +164,8 @@ export function YouTubePreview({
 
                             switch (event.data) {
                                 case 1:
-                                    // El tráiler comenzó a reproducirse
+                                    playbackStarted = true;
+                                    window.clearTimeout(playbackTimeout);
                                     onReady?.();
                                     break;
 
@@ -156,6 +176,9 @@ export function YouTubePreview({
                             }
                         },
                         onError: () => {
+                            reportFailure()
+                            window.clearTimeout(playbackTimeout);
+
                             if (!cancelled) {
                                 onError?.();
                             }
@@ -177,6 +200,7 @@ export function YouTubePreview({
 
         return () => {
             cancelled = true;
+            window.clearTimeout(playbackTimeout);
             playerRef.current = null;
 
             if (player) {

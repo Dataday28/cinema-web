@@ -6,10 +6,11 @@ import type { PreviewPosition } from './MediaCard';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Play, Plus, ThumbsUp, ChevronDown } from "lucide-react";
 import { useAuth } from '../../context/AuthContext';
-import { getMediaTrailers } from '../../services/jellyfin/traileres';
+import { getMediaTrailers, type TrailerInfo } from '../../services/jellyfin/traileres';
 import { YouTubePreview } from './YouTubePreview';
 import { Volume2, VolumeX } from 'lucide-react';
 import { activatePreview, subscribeToPreview } from '../../utils/previewCoordinator';
+import { sortTrailers } from '../../utils/trailerSelector';
 
 interface MediaPreviewProps {
     item: MediaItem;
@@ -50,6 +51,11 @@ export function MediaPreview({
     const previewInstanceId = useRef(
         crypto.randomUUID()
     );
+
+    const [availableTrailers, setAvailableTrailers] =
+        useState<TrailerInfo[]>([]);
+
+    const [trailerIndex, setTrailerIndex] = useState(0);
 
     useEffect(() => {
         return subscribeToPreview((activeId) => {
@@ -95,9 +101,14 @@ export function MediaPreview({
                     return;
                 }
 
+                const sortedTrailers = sortTrailers(trailers);
+
                 activatePreview(previewInstanceId.current);
-                setTrailerId(trailers[0].id);
+                setAvailableTrailers(sortedTrailers);
+                setTrailerIndex(0);
+                setTrailerId(sortedTrailers[0].id);
                 setShowTrailer(true);
+
             } catch (error) {
                 console.warn('Error cargando tráiler:', error);
             }
@@ -120,10 +131,28 @@ export function MediaPreview({
 
     const handleTrailerError = useCallback(() => {
         setTrailerPlaying(false);
+        setTrailerMuted(true);
+
+        const nextIndex = trailerIndex + 1;
+
+        if (nextIndex < availableTrailers.length) {
+            const nextTrailer = availableTrailers[nextIndex];
+
+            console.info(
+                'Intentando tráiler alternativo:',
+                nextTrailer.name
+            );
+
+            setTrailerIndex(nextIndex);
+            setTrailerId(nextTrailer.id);
+
+            return;
+        }
+
+        // Se agotaron los tráileres disponibles
         setShowTrailer(false);
         setTrailerFinished(true);
-        setTrailerMuted(true);
-    }, []);
+    }, [trailerIndex, availableTrailers]);
 
     const handleTrailerEnded = useCallback(() => {
         setTrailerPlaying(false);
@@ -152,8 +181,7 @@ export function MediaPreview({
                 transition-all
                 duration-300
                 cubic-bezier(0.2, 0, 0, 1)
-                ${
-                isExpanded
+                ${isExpanded
                     ? 'scale-125 -translate-y-6 shadow-black/95'
                     : 'scale-100 translate-y-0 opacity-90'
                 }
@@ -166,27 +194,30 @@ export function MediaPreview({
             }}
         >
 
-            <div className="relative aspect-video w-full overflow-hidden">
-                
+            <div className="relative aspect-video w-full overflow-hidden bg-black">
                 <img
                     src={item.landscape ?? item.image}
                     alt={item.title}
                     className={`
-                        absolute inset-0 h-full w-full
-                        object-cover
-                        transition-opacity duration-500
+                        absolute inset-0 z-10
+                        h-full w-full object-cover
+                        pointer-events-none
+                        transition-opacity duration-700 ease-in-out
                         ${trailerPlaying ? 'opacity-0' : 'opacity-100'}
                     `}
                 />
 
                 {showTrailer && trailerId && !trailerFinished && (
-                    <YouTubePreview
-                        videoId={trailerId}
-                        muted={trailerMuted}
-                        onReady={handleTrailerReady}
-                        onEnded={handleTrailerEnded}
-                        onError={handleTrailerError}
-                    />
+                    <div className="absolute inset-0">
+                        <YouTubePreview
+                            key={trailerId}
+                            videoId={trailerId}
+                            muted={trailerMuted}
+                            onReady={handleTrailerReady}
+                            onEnded={handleTrailerEnded}
+                            onError={handleTrailerError}
+                        />
+                    </div>
                 )}
 
                 {trailerPlaying && (
@@ -198,48 +229,24 @@ export function MediaPreview({
                         }}
                         aria-label={
                             trailerMuted
-                                ? 'Activar sonido del tráiler'
-                                : 'Silenciar tráiler'
-                        }
-                        title={
-                            trailerMuted
                                 ? 'Activar sonido'
-                                : 'Silenciar'
+                                : 'Silenciar tráiler'
                         }
                         className="
                             absolute bottom-3 right-3 z-20
-                            flex h-7 w-7
-                            items-center justify-center
-                            rounded-full
-                            border border-white/60
+                            flex h-5 w-5 items-center justify-center
+                            rounded-full border border-white/60
                             bg-black/50 text-white
-                            backdrop-blur-sm
-                            transition-colors
+                            backdrop-blur-sm transition-colors
                             hover:bg-black/80
-                            cursor-pointer
                         "
                     >
-                        {trailerMuted ? (
-                            <VolumeX size={18} />
-                        ) : (
-                            <Volume2 size={18} />
-                        )}
+                        {trailerMuted
+                            ? <VolumeX size={10} />
+                            : <Volume2 size={10} />
+                        }
                     </button>
                 )}
-
-                {item.progress !== undefined && item.progress > 0 && (
-                    <div className="
-                        absolute bottom-0 left-0 right-0
-                        z-10 h-1.5 overflow-hidden
-                        rounded-full bg-white/30
-                    ">
-                        <div
-                            className="h-full bg-white"
-                            style={{ width: `${item.progress}%` }}
-                        />
-                    </div>
-                )}
-
             </div>
 
             <div className="p-4">
@@ -340,7 +347,7 @@ export function MediaPreview({
                             {item.quality.hdr}
                         </span>
                     )}
-                    
+
 
                 </div>
 
