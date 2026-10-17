@@ -7,6 +7,7 @@ import { MediaDetailsProvider } from './context/MediaDetailsContext.tsx'
 import { AuthProvider } from './context/AuthContext.tsx'
 import { PlaybackProvider } from './context/PlaybackContext.tsx'
 import { PreviewSettingsProvider } from './context/PreviewSettingsContext.tsx'
+import { NavigationModeProvider } from './context/NavigationModeContext.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -14,9 +15,11 @@ createRoot(document.getElementById('root')!).render(
       <AuthProvider>
         <PlaybackProvider>
           <MediaDetailsProvider>
-            <PreviewSettingsProvider>
-              <App />
-            </PreviewSettingsProvider>
+            <NavigationModeProvider>
+              <PreviewSettingsProvider>
+                <App />
+              </PreviewSettingsProvider>
+            </NavigationModeProvider>
           </MediaDetailsProvider>
         </PlaybackProvider>
       </AuthProvider>

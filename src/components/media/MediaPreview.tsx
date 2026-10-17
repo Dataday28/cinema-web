@@ -31,7 +31,19 @@ interface MediaPreviewProps {
     onClose?: () => void;
     playButtonRef?: React.RefObject<HTMLButtonElement | null>;
     onExitForward?: () => void;
+    onDismiss?: () => void;
 }
+
+const previewButtonFocusClass = `
+    focus:outline-none
+    focus-visible:ring-[3px]
+    focus-visible:ring-sky-400
+    focus-visible:ring-offset-2
+    focus-visible:ring-offset-[#181818]
+    focus-visible:scale-110
+    transition-transform duration-150
+    motion-reduce:transition-none
+`;
 
 function formatRuntime(minutes: number) {
     const hours = Math.floor(minutes / 60);
@@ -55,7 +67,8 @@ export function MediaPreview({
     previewRef,
     playButtonRef,
     onClose,
-    onExitForward
+    onExitForward,
+    onDismiss,
 }: MediaPreviewProps) {
 
     const { openMediaDetails } = useMediaDetails();
@@ -375,14 +388,14 @@ export function MediaPreview({
                                 ? 'Activar sonido'
                                 : 'Silenciar tráiler'
                         }
-                        className="
+                        className={`
                             absolute bottom-3 right-3 z-20
                             flex h-5 w-5 items-center justify-center
                             rounded-full border border-white/60
                             bg-black/50 text-white
                             backdrop-blur-sm transition-colors
                             hover:bg-black/80
-                        "
+                        `}
                     >
                         {trailerMuted
                             ? <VolumeX size={10} />
@@ -399,8 +412,13 @@ export function MediaPreview({
                         ref={playButtonRef}
                         type="button"
                         aria-label={`Reproducir ${item.title}`}
-                        onClick={() => play(item.id)}
-                        className="
+                        onClick={(event) => {
+                            event.stopPropagation();
+
+                            onDismiss?.();
+                            play(item.id);
+                        }}
+                        className={`
                             flex h-10 w-10
                             items-center justify-center
                             rounded-full
@@ -408,14 +426,15 @@ export function MediaPreview({
                             transition
                             hover:bg-gray-200
                             cursor-pointer
-                            "
+                            ${previewButtonFocusClass}
+                        `}
                     >
                         <Play className="w-4 h-4 text-black fill-black ml-0.5" />
                     </button>
 
                     <button
                         aria-label='Agregar a mi lista'
-                        className="
+                        className={`
                             flex h-10 w-10
                             items-center justify-center
                             rounded-full
@@ -424,14 +443,15 @@ export function MediaPreview({
                             transition
                             hover:border-white
                             cursor-pointer
-                            "
+                            ${previewButtonFocusClass}
+                        `}
                     >
                         <Plus className="w-4 h-4" />
                     </button>
 
                     <button
                         aria-label='Me gusta'
-                        className="
+                        className={`
                             flex h-10 w-10
                             items-center justify-center
                             rounded-full
@@ -440,15 +460,21 @@ export function MediaPreview({
                             transition
                             hover:border-white
                             cursor-pointer
-                            "
+                            ${previewButtonFocusClass}
+                        `}
                     >
                         <ThumbsUp className="w-4 h-4" />
                     </button>
 
                     <button
                         aria-label='Ver detalles'
-                        onClick={() => openMediaDetails(item)}
-                        className="
+                        onClick={(event) => {
+                            event.stopPropagation();
+
+                            onDismiss?.();
+                            openMediaDetails(item);
+}}
+                        className={`
                             ml-auto
                             flex h-10 w-10
                             items-center justify-center
@@ -458,7 +484,8 @@ export function MediaPreview({
                             transition
                             hover:border-white
                             cursor-pointer
-                            "
+                            ${previewButtonFocusClass}
+                        `}
                     >
                         <ChevronDown className="w-4 h-4" />
                     </button>

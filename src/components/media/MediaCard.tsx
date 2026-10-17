@@ -12,6 +12,7 @@ import type { MediaItem } from '../../types/media';
 import { MediaPreview } from './MediaPreview';
 import { useMediaDetails } from '../../context/MediaDetailsContext';
 import { getAdjacentMediaCard, getVerticalMediaCard } from '../../utils/mediaNavegation';
+import { useNavigationMode } from '../../context/NavigationModeContext';
 
 interface MediaCardProps {
     item: MediaItem;
@@ -39,8 +40,14 @@ export function MediaCard({ item }: MediaCardProps) {
     const keyboardDismissed = useRef(false);
     const playButtonRef = useRef<HTMLButtonElement>(null);
     const nextFocusTarget = useRef<HTMLElement | null>(null);
+    const { mode, setNavigationMode } = useNavigationMode();
+    const modeRef = useRef(mode);
 
-    
+
+    useEffect(() => {
+        modeRef.current = mode;
+    }, [mode]);
+
     useEffect(() => {
         return () => {
             if (openTimeout.current) {
@@ -52,6 +59,37 @@ export function MediaCard({ item }: MediaCardProps) {
             }
         };
     }, []);
+
+    useEffect(() => {
+        const handleWindowBlur = () => {
+            closePreview();
+        };
+
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                closePreview();
+            }
+        };
+
+        window.addEventListener('blur', handleWindowBlur);
+
+        document.addEventListener(
+            'visibilitychange',
+            handleVisibilityChange
+        );
+
+        return () => {
+            window.removeEventListener(
+                'blur',
+                handleWindowBlur
+            );
+
+            document.removeEventListener(
+                'visibilitychange',
+                handleVisibilityChange
+            );
+        };
+    });
 
     function getNextFocusableElement(
         current: HTMLElement
@@ -101,13 +139,7 @@ export function MediaCard({ item }: MediaCardProps) {
     const handleMouseEnter = () => {
         if (window.innerWidth < 768) return;
 
-        if (
-            document.activeElement?.matches(
-                '[data-media-card="true"]'
-            )
-        ) {
-            return;
-        }
+        if (mode === 'keyboard') return;
 
         if (openTimeout.current !== null) {
             window.clearTimeout(openTimeout.current);
@@ -118,11 +150,14 @@ export function MediaCard({ item }: MediaCardProps) {
         }
 
         openTimeout.current = window.setTimeout(() => {
-            if (document.activeElement === cardRef.current) {
-                return;
-            }
+            openTimeout.current = null;
+
+            if (modeRef.current !== 'mouse') return;
+            if (!cardRef.current) return;
+            if (document.hidden) return;
 
             updatePreviewPosition();
+
             setPreviewTrigger('mouse');
             setShowPreview(true);
         }, 400);
@@ -139,6 +174,8 @@ export function MediaCard({ item }: MediaCardProps) {
     };
 
     const handleCardFocus = () => {
+        setNavigationMode('keyboard');
+
         if (keyboardDismissed.current) return;
 
         if (openTimeout.current !== null) {
@@ -183,8 +220,15 @@ export function MediaCard({ item }: MediaCardProps) {
     const handleCardKeyDown = (
         event: KeyboardEvent<HTMLElement>
     ) => {
-        // Solo procesar teclas cuando el foco
-        // está directamente sobre la tarjeta.
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            event.stopPropagation();
+
+            closePreview();
+            openMediaDetails(item);
+            return;
+        }
+
         if (event.target !== event.currentTarget) {
             return;
         }
@@ -362,6 +406,20 @@ export function MediaCard({ item }: MediaCardProps) {
         });
     };
 
+    const closePreview = () => {
+        if (openTimeout.current !== null) {
+            window.clearTimeout(openTimeout.current);
+            openTimeout.current = null;
+        }
+
+        if (closeTimeout.current !== null) {
+            window.clearTimeout(closeTimeout.current);
+            closeTimeout.current = null;
+        }
+
+        setShowPreview(false);
+    };
+
     return (
         <article
             ref={cardRef}
@@ -378,20 +436,31 @@ export function MediaCard({ item }: MediaCardProps) {
             onMouseLeave={handleMouseLeave}
             data-media-card="true"
             data-media-id={item.id}
+            onPointerDown={(event) => {
+                if (event.pointerType === 'mouse') {
+                    setNavigationMode('mouse');
+                }
+            }}
             className={`
                 relative
-                w-[75vw]
-                sm:w-70
-                md:w-[320px]
-                lg:w-69
-                shrink-0
-                cursor-pointer
-                scroll-mt-28
-                duration-200
-                focus-visible:outline
-                focus-visible:outline-offset-4
-                focus-visible:outline-white
-                ${showPreview ? 'opacity-0' : 'opacity-100'}
+                w-[75vw] sm:w-70 md:w-[320px] lg:w-69
+                shrink-0 cursor-pointer
+
+                transition-all duration-200
+                motion-reduce:transition-none
+
+                focus:outline-none
+                focus-visible:z-20
+                focus-visible:scale-[1.04]
+                focus-visible:ring-[3px]
+                focus-visible:ring-sky-400
+                focus-visible:ring-offset-4
+                focus-visible:ring-offset-[#101010]
+
+                ${showPreview && previewTrigger === 'mouse'
+                    ? 'opacity-0'
+                    : 'opacity-100'
+                }
             `}
         >
 
@@ -467,6 +536,7 @@ export function MediaCard({ item }: MediaCardProps) {
                     onExitForward={handleExitPreview}
                     onMouseEnter={handlePreviewMouseEnter}
                     onMouseLeave={handlePreviewMouseLeave}
+                    onDismiss={closePreview}
                 />
             )}
 
