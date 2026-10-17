@@ -1,3 +1,4 @@
+import type { PreviewLanguage } from "../context/PreviewSettingsContext";
 import type { TrailerInfo } from "../services/jellyfin/traileres";
 
 
@@ -8,51 +9,61 @@ function normalizeText(value: string): string {
         .toLowerCase();
 }
 
-function getTrailerScore(trailer: TrailerInfo): number {
+function getTrailerScore(
+    trailer: TrailerInfo,
+    language: PreviewLanguage
+): number {
     const name = normalizeText(trailer.name);
 
     let score = 0;
 
-    // Preferir tráileres oficiales
-    // if (/\boficial\b/.test(name)) {
+    // if (/\boficial\b|\bofficial\b/.test(name)) {
     //     score += 40;
     // }
 
-    // Preferir audio en español
-    if (/\bdoblad[oa]\b/.test(name)) {
-        score += 35;
-    }
-
-    if (/\blatino\b/.test(name)) {
-        score += 25;
-    }
-
-    if (/\bespanol\b|\bespana\b/.test(name)) {
-        score += 20;
-    }
-
-    // Subtitulado es válido, pero menos prioritario
-    if (/\bsubtitulado\b|\bsubtitulos\b/.test(name)) {
-        score += 10;
-    }
-
-    // Priorizar tráileres completos
     if (/\btrailer\b/.test(name)) {
         score += 15;
     }
 
-    // Evitar teasers si hay alternativas
     if (/\bteaser\b|\bavance\b|\btv spot\b/.test(name)) {
         score -= 20;
+    }
+
+    if (language === 'es') {
+        if (/\bdoblad[oa]\b|\blatino\b/.test(name)) {
+            score += 35;
+        }
+
+        if (/\bespanol\b|\bespana\b/.test(name)) {
+            score += 25;
+        }
+
+        if (/\bsubtitulado\b|\bsubtitulos\b/.test(name)) {
+            score += 10;
+        }
+    }
+
+    if (language === 'en') {
+        if (/\benglish\b|\boriginal version\b|\bvo\b/.test(name)) {
+            score += 35;
+        }
+
+        if (/\bsubtitled\b/.test(name)) {
+            score += 10;
+        }
     }
 
     return score;
 }
 
 export function sortTrailers(
-    trailers: TrailerInfo[]
+    trailers: TrailerInfo[],
+    language: PreviewLanguage = 'auto'
 ): TrailerInfo[] {
-    return [...trailers].sort(
-        (a, b) => getTrailerScore(b) - getTrailerScore(a)
-    );
+    return [...trailers].sort((a, b) => {
+        return (
+            getTrailerScore(b, language) -
+            getTrailerScore(a, language)
+        );
+    });
 }

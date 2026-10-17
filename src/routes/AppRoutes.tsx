@@ -13,6 +13,7 @@ import { Login } from '../pages/login/Login';
 import { Watch } from '../pages/watch/Watch';
 import { Movies } from '../pages/movies/Movies';
 import { Series } from '../pages/series/Series';
+import Settings from '../pages/settings/Settings';
 
 function RequireAuthentication() {
     const { isAuthenticated } = useAuth();
@@ -62,6 +63,13 @@ export function AppRoutes() {
                 <Route element={<AppLayout />}>
                     <Route index element={<Home />} />
                     <Route path="watch/:itemId" element={<WatchRoute />} />
+                </Route>
+            </Route>
+
+            <Route element={<RequireAuthentication />}>
+                <Route element={<AppLayout />}>
+                    <Route index element={<Home />} />
+                    <Route path="/settings" element={<Settings />} />
                 </Route>
             </Route>
 

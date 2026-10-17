@@ -2,9 +2,15 @@ import {
     useEffect,
     useRef,
     useState,
+    
+} from 'react';
+import type {
+    FocusEvent,
+    KeyboardEvent,
 } from 'react';
 import type { MediaItem } from '../../types/media';
 import { MediaPreview } from './MediaPreview';
+import { useMediaDetails } from '../../context/MediaDetailsContext';
 
 interface MediaCardProps {
     item: MediaItem;
@@ -21,13 +27,33 @@ const SCREEN_MARGIN = 16;
 
 export function MediaCard({ item }: MediaCardProps) {
 
+    const { openMediaDetails } = useMediaDetails();
     const [showPreview, setShowPreview] = useState(false);
     const [previewPosition, setPreviewPosition] = useState<PreviewPosition | null>(null);
     const cardRef = useRef<HTMLElement>(null);
     const openTimeout = useRef<number | null>(null);
     const closeTimeout = useRef<number | null>(null);
+    const [previewTrigger, setPreviewTrigger] = useState<'mouse' | 'keyboard'>('mouse');
+    const previewRef = useRef<HTMLDivElement>(null);
+    const keyboardDismissed = useRef(false);
+    const playButtonRef = useRef<HTMLButtonElement>(null);
+
+    
+    useEffect(() => {
+        return () => {
+            if (openTimeout.current) {
+                window.clearTimeout(openTimeout.current);
+            }
+
+            if (closeTimeout.current) {
+                window.clearTimeout(closeTimeout.current);
+            }
+        };
+    }, []);
+    
     
     const handlePreviewMouseEnter = () => {
+        setPreviewTrigger('mouse');
         if (closeTimeout.current) {
             window.clearTimeout(closeTimeout.current);
         }
@@ -42,44 +68,22 @@ export function MediaCard({ item }: MediaCardProps) {
 
     const handleMouseEnter = () => {
         if (window.innerWidth < 768) return;
-        
-        if (closeTimeout.current) {
+
+        if (openTimeout.current !== null) {
+            window.clearTimeout(openTimeout.current);
+        }
+
+        if (closeTimeout.current !== null) {
             window.clearTimeout(closeTimeout.current);
         }
 
         openTimeout.current = window.setTimeout(() => {
-            if (!cardRef.current) return;
-
-            const rect = cardRef.current.getBoundingClientRect();
-            const naturalCenterLeft = rect.left + rect.width / 2;
-            const halfPreview = PREVIEW_WIDTH / 2;
-
-            // Ajuste de límites para no salir de pantalla
-            let left = naturalCenterLeft;
-            const minLeft = halfPreview + SCREEN_MARGIN;
-            const maxLeft = window.innerWidth - halfPreview - SCREEN_MARGIN;
-
-            // 2. Determinar el origen de la animación (Origin) según colisión
-            let transformOrigin = 'origin-center';
-
-            if (left < minLeft) {
-                left = minLeft;
-                transformOrigin = 'origin-left'; // Crece hacia la derecha
-            } else if (left > maxLeft) {
-                left = maxLeft;
-                transformOrigin = 'origin-right'; // Crece hacia la izquierda
+            if (document.activeElement === cardRef.current) {
+                return;
             }
 
-            const top = rect.top + rect.height / 2 + window.scrollY;
-            const leftWithScroll = left + window.scrollX;
-
-            // 3. Guardar las coordenadas y el origin
-            setPreviewPosition({
-                top,
-                left: leftWithScroll,
-                transformOrigin,
-            });
-
+            updatePreviewPosition();
+            setPreviewTrigger('mouse');
             setShowPreview(true);
         }, 400);
     };
@@ -94,21 +98,141 @@ export function MediaCard({ item }: MediaCardProps) {
         }, 200);
     };
 
-    useEffect(() => {
-        return () => {
-            if (openTimeout.current) {
-                window.clearTimeout(openTimeout.current);
-            }
+    const handleCardFocus = () => {
+        if (keyboardDismissed.current) return;
 
-            if (closeTimeout.current) {
-                window.clearTimeout(closeTimeout.current);
+        if (openTimeout.current !== null) {
+            window.clearTimeout(openTimeout.current);
+        }
+
+        if (closeTimeout.current !== null) {
+            window.clearTimeout(closeTimeout.current);
+        }
+
+        updatePreviewPosition();
+        setPreviewTrigger('keyboard');
+        setShowPreview(true);
+    };
+
+    const handleCardBlur = (event: FocusEvent<HTMLElement>) => {
+        const next = event.relatedTarget;
+
+        if (
+            next instanceof Node &&
+            previewRef.current?.contains(next)
+        ) {
+            return;
+        }
+
+        if (closeTimeout.current !== null) {
+            window.clearTimeout(closeTimeout.current);
+        }
+
+        closeTimeout.current = window.setTimeout(() => {
+            const active = document.activeElement;
+
+            if (
+                active !== cardRef.current &&
+                !previewRef.current?.contains(active)
+            ) {
+                setShowPreview(false);
             }
-        };
-    }, []);
+        }, 0);
+    };
+
+    const handleCardKeyDown = (
+        event: KeyboardEvent<HTMLElement>
+    ) => {
+        // Solo procesar teclas cuando el foco
+        // está directamente sobre la tarjeta.
+        if (event.target !== event.currentTarget) {
+            return;
+        }
+
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+
+            keyboardDismissed.current = true;
+            setShowPreview(false);
+            return;
+        }
+
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            event.stopPropagation();
+
+            openMediaDetails(item);
+            setShowPreview(false);
+            return;
+        }
+
+        if (
+            event.key === 'Tab' &&
+            !event.shiftKey &&
+            showPreview
+        ) {
+            const playButton = playButtonRef.current;
+
+            if (playButton) {
+                event.preventDefault();
+                playButton.focus();
+            }
+        }
+    };
+
+    const handleCardBlurCapture = () => {
+        keyboardDismissed.current = false;
+    };
+
+    const updatePreviewPosition = () => {
+        if (!cardRef.current) return;
+
+        const rect = cardRef.current.getBoundingClientRect();
+
+        const naturalCenterLeft = rect.left + rect.width / 2;
+        const halfPreview = PREVIEW_WIDTH / 2;
+
+        const minLeft = halfPreview + SCREEN_MARGIN;
+        const maxLeft = Math.max(
+            minLeft,
+            window.innerWidth - halfPreview - SCREEN_MARGIN
+        );
+
+        const left = Math.max(
+            minLeft,
+            Math.min(naturalCenterLeft, maxLeft)
+        );
+
+        let transformOrigin = 'origin-center';
+
+        if (naturalCenterLeft < minLeft) {
+            transformOrigin = 'origin-left';
+        } else if (naturalCenterLeft > maxLeft) {
+            transformOrigin = 'origin-right';
+        }
+
+        setPreviewPosition({
+            top: rect.top + rect.height / 2 + window.scrollY,
+            left: left + window.scrollX,
+            transformOrigin,
+        });
+    };
 
     return (
         <article
             ref={cardRef}
+            tabIndex={0}
+            role="button"
+            aria-label={`Ver detalles de ${item.title}`}
+            aria-haspopup="true"
+            aria-expanded={showPreview}
+            onFocus={handleCardFocus}
+            onBlur={handleCardBlur}
+            onBlurCapture={handleCardBlurCapture}
+            onKeyDown={handleCardKeyDown}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
             className={`
                 relative
                 w-[75vw]
@@ -118,10 +242,11 @@ export function MediaCard({ item }: MediaCardProps) {
                 shrink-0
                 cursor-pointer
                 duration-200
+                focus-visible:outline
+                focus-visible:outline-offset-4
+                focus-visible:outline-white
                 ${showPreview ? 'opacity-0' : 'opacity-100'}
             `}
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
         >
 
             <div
@@ -182,8 +307,17 @@ export function MediaCard({ item }: MediaCardProps) {
 
             {showPreview && previewPosition && (
                 <MediaPreview
+                    key={item.id}
                     item={item}
                     position={previewPosition}
+                    trigger={previewTrigger}
+                    previewRef={previewRef}
+                    playButtonRef={playButtonRef}
+                    onClose={() => {
+                        keyboardDismissed.current = true;
+                        setShowPreview(false);
+                        cardRef.current?.focus();
+                    }}
                     onMouseEnter={handlePreviewMouseEnter}
                     onMouseLeave={handlePreviewMouseLeave}
                 />

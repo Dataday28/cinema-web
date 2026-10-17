@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { LogOut, Settings, User } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 
 const links = [
@@ -10,8 +11,34 @@ const links = [
 
 function Navbar() {
 	const [menuOpen, setMenuOpen] = useState(false)
+	const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+	const profileMenuRef = useRef<HTMLDivElement>(null)
+	const profileButtonRef = useRef<HTMLButtonElement>(null)
 	const [isScrolled, setIsScrolled] = useState(false)
 	const isHome = useLocation().pathname === '/'
+
+	useEffect(() => {
+		if (!profileMenuOpen) return
+
+		const handlePointerDown = (event: PointerEvent) => {
+			if (event.target instanceof Node && !profileMenuRef.current?.contains(event.target)) {
+				setProfileMenuOpen(false)
+			}
+		}
+		const handleKeyDown = (event: KeyboardEvent) => {
+			if (event.key === 'Escape') {
+				setProfileMenuOpen(false)
+				profileButtonRef.current?.focus()
+			}
+		}
+
+		document.addEventListener('pointerdown', handlePointerDown)
+		document.addEventListener('keydown', handleKeyDown)
+		return () => {
+			document.removeEventListener('pointerdown', handlePointerDown)
+			document.removeEventListener('keydown', handleKeyDown)
+		}
+	}, [profileMenuOpen])
 
 	useEffect(() => {
 		const updateScrollState = () => setIsScrolled(window.scrollY > 0)
@@ -87,13 +114,41 @@ function Navbar() {
 						</svg>
 					</button>
 
-					<button
-						aria-label="Perfil de usuario"
-						className="flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-br from-fuchsia-500 to-blue-500 text-sm font-semibold shadow-lg shadow-blue-950/30"
-						type="button"
+					<div
+						className="relative"
+						ref={profileMenuRef}
+						onBlur={(event) => {
+							if (!event.currentTarget.contains(event.relatedTarget)) setProfileMenuOpen(false)
+						}}
 					>
-						J
-					</button>
+						<button
+							aria-label="Perfil de usuario"
+							aria-expanded={profileMenuOpen}
+							aria-controls="profile-menu"
+							className="flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-br from-fuchsia-500 to-blue-500 text-sm font-semibold shadow-lg shadow-blue-950/30 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-300"
+							onClick={() => setProfileMenuOpen((isOpen) => !isOpen)}
+							ref={profileButtonRef}
+							type="button"
+						>
+							J
+						</button>
+						{profileMenuOpen && (
+							<div id="profile-menu" className="absolute right-0 top-full mt-3 w-52 rounded-xl border border-white/10 bg-zinc-950/95 p-2 text-sm shadow-xl backdrop-blur-xl">
+								<button type="button" className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-white/85 transition-colors hover:bg-white/10 hover:text-white focus-visible:bg-white/10 focus-visible:outline-none">
+									<User aria-hidden="true" className="h-4 w-4" />
+									Mi perfil
+								</button>
+								<Link to="/settings" onClick={() => setProfileMenuOpen(false)} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-white/85 transition-colors hover:bg-white/10 hover:text-white focus-visible:bg-white/10 focus-visible:outline-none">
+									<Settings aria-hidden="true" className="h-4 w-4" />
+									Configuración
+								</Link>
+								<button type="button" className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-white/85 transition-colors hover:bg-white/10 hover:text-white focus-visible:bg-white/10 focus-visible:outline-none">
+									<LogOut aria-hidden="true" className="h-4 w-4" />
+									Cerrar sesión
+								</button>
+							</div>
+						)}
+					</div>
 
 					<button
 						aria-expanded={menuOpen}
