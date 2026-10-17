@@ -30,6 +30,7 @@ interface MediaPreviewProps {
     previewRef?: RefObject<HTMLDivElement | null>;
     onClose?: () => void;
     playButtonRef?: React.RefObject<HTMLButtonElement | null>;
+    onExitForward?: () => void;
 }
 
 function formatRuntime(minutes: number) {
@@ -54,6 +55,7 @@ export function MediaPreview({
     previewRef,
     playButtonRef,
     onClose,
+    onExitForward
 }: MediaPreviewProps) {
 
     const { openMediaDetails } = useMediaDetails();
@@ -255,12 +257,14 @@ export function MediaPreview({
 
         // Tab desde el último botón:
         // salir del popup y continuar por la página.
-        if (!event.shiftKey && currentIndex === buttons.length - 1) {
+        if (
+            !event.shiftKey &&
+            currentIndex === buttons.length - 1
+        ) {
             event.preventDefault();
             event.stopPropagation();
 
-            // Cerramos el popup antes de continuar.
-            onClose?.();
+            onExitForward?.();
             return;
         }
 

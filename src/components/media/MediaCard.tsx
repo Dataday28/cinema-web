@@ -11,6 +11,7 @@ import type {
 import type { MediaItem } from '../../types/media';
 import { MediaPreview } from './MediaPreview';
 import { useMediaDetails } from '../../context/MediaDetailsContext';
+import { getAdjacentMediaCard, getVerticalMediaCard } from '../../utils/mediaNavegation';
 
 interface MediaCardProps {
     item: MediaItem;
@@ -37,6 +38,7 @@ export function MediaCard({ item }: MediaCardProps) {
     const previewRef = useRef<HTMLDivElement>(null);
     const keyboardDismissed = useRef(false);
     const playButtonRef = useRef<HTMLButtonElement>(null);
+    const nextFocusTarget = useRef<HTMLElement | null>(null);
 
     
     useEffect(() => {
@@ -50,6 +52,36 @@ export function MediaCard({ item }: MediaCardProps) {
             }
         };
     }, []);
+
+    function getNextFocusableElement(
+        current: HTMLElement
+    ): HTMLElement | null {
+        const selector = [
+            'a[href]',
+            'button:not([disabled])',
+            'input:not([disabled])',
+            'select:not([disabled])',
+            'textarea:not([disabled])',
+            '[tabindex]:not([tabindex="-1"])',
+        ].join(',');
+
+        const elements = Array.from(
+            document.querySelectorAll<HTMLElement>(selector)
+        ).filter((element) => {
+            return (
+                element.getClientRects().length > 0 &&
+                !element.closest('[aria-hidden="true"]')
+            );
+        });
+
+        const currentIndex = elements.indexOf(current);
+
+        if (currentIndex === -1) {
+            return null;
+        }
+
+        return elements[currentIndex + 1] ?? null;
+    }
     
     
     const handlePreviewMouseEnter = () => {
@@ -68,6 +100,14 @@ export function MediaCard({ item }: MediaCardProps) {
 
     const handleMouseEnter = () => {
         if (window.innerWidth < 768) return;
+
+        if (
+            document.activeElement?.matches(
+                '[data-media-card="true"]'
+            )
+        ) {
+            return;
+        }
 
         if (openTimeout.current !== null) {
             window.clearTimeout(openTimeout.current);
@@ -149,6 +189,38 @@ export function MediaCard({ item }: MediaCardProps) {
             return;
         }
 
+        if (event.key === 'ArrowRight') {
+            event.preventDefault();
+            event.stopPropagation();
+
+            navigateToAdjacentCard('right');
+            return;
+        }
+
+        if (event.key === 'ArrowLeft') {
+            event.preventDefault();
+            event.stopPropagation();
+
+            navigateToAdjacentCard('left');
+            return;
+        }
+
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            event.stopPropagation();
+
+            navigateToVerticalCard('down');
+            return;
+        }
+
+        if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            event.stopPropagation();
+
+            navigateToVerticalCard('up');
+            return;
+        }
+
         if (event.key === 'Escape') {
             event.preventDefault();
             event.stopPropagation();
@@ -219,6 +291,77 @@ export function MediaCard({ item }: MediaCardProps) {
         });
     };
 
+    const handleExitPreview = () => {
+        if (!cardRef.current) return;
+
+        nextFocusTarget.current =
+            getNextFocusableElement(cardRef.current);
+
+        keyboardDismissed.current = true;
+        setShowPreview(false);
+
+        const nextElement = nextFocusTarget.current;
+
+        if (nextElement) {
+            nextElement.focus();
+        }
+    };
+
+    const navigateToAdjacentCard = (
+        direction: 'left' | 'right'
+    ) => {
+        if (!cardRef.current) return;
+
+        const target = getAdjacentMediaCard(
+            cardRef.current,
+            direction
+        );
+
+        focusMediaCard(target);
+    };
+
+    const navigateToVerticalCard = (
+        direction: 'up' | 'down'
+    ) => {
+        if (!cardRef.current) return;
+
+        const target = getVerticalMediaCard(
+            cardRef.current,
+            direction
+        );
+
+        focusMediaCard(target);
+    };
+
+    const focusMediaCard = (
+        target: HTMLElement | null
+    ) => {
+        if (!target) return;
+
+        if (openTimeout.current !== null) {
+            window.clearTimeout(openTimeout.current);
+            openTimeout.current = null;
+        }
+
+        if (closeTimeout.current !== null) {
+            window.clearTimeout(closeTimeout.current);
+            closeTimeout.current = null;
+        }
+
+        keyboardDismissed.current = true;
+        setShowPreview(false);
+
+        target.scrollIntoView({
+            behavior: 'smooth',
+            block: 'nearest',
+            inline: 'nearest',
+        });
+
+        target.focus({
+            preventScroll: true,
+        });
+    };
+
     return (
         <article
             ref={cardRef}
@@ -233,6 +376,8 @@ export function MediaCard({ item }: MediaCardProps) {
             onKeyDown={handleCardKeyDown}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
+            data-media-card="true"
+            data-media-id={item.id}
             className={`
                 relative
                 w-[75vw]
@@ -241,6 +386,7 @@ export function MediaCard({ item }: MediaCardProps) {
                 lg:w-69
                 shrink-0
                 cursor-pointer
+                scroll-mt-28
                 duration-200
                 focus-visible:outline
                 focus-visible:outline-offset-4
@@ -318,6 +464,7 @@ export function MediaCard({ item }: MediaCardProps) {
                         setShowPreview(false);
                         cardRef.current?.focus();
                     }}
+                    onExitForward={handleExitPreview}
                     onMouseEnter={handlePreviewMouseEnter}
                     onMouseLeave={handlePreviewMouseLeave}
                 />

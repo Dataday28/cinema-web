@@ -217,6 +217,7 @@ export function MediaRow({
 
                 <div
                     ref={listRef}
+                    data-media-row="true"
                     className="
                         flex
                         w-full
